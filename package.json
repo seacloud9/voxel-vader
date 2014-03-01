@@ -10,9 +10,9 @@
     "devDependencies": {},
     "repository": {
         "type": "git",
-        "url": "git://github.com/substack/voxel-creature.git"
+        "url": "git://github.com/seacloud9/voxel-vader.git"
     },
-    "homepage": "https://github.com/substack/voxel-creature",
+    "homepage": "https://github.com/seacloud9/voxel-vader",
     "keywords": [
         "voxel",
         "Invader",
