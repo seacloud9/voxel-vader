@@ -18,7 +18,6 @@ function Vader(game, opts) {
     if (opts.size == undefined) opts.size = 5;
     if (opts.step == undefined) opts.step = opts.size / 5;
     if (opts.padding == undefined) opts.padding = parseInt(opts.size / 2);
-    if (opts.message == undefined) opts.message = 'wtf';
     if (opts.mats == undefined) opts.mats = [
         new game.THREE.MeshLambertMaterial({
             color: opts.clr[1],
@@ -29,6 +28,15 @@ function Vader(game, opts) {
             ambient: opts.amb[0]
         }),
     ];
+
+    var _mSpeed = .2;
+    var _mRot = .1;
+    this.xd = Math.random() * _mSpeed * 2 - _mSpeed;
+    this.yd = Math.random() * _mSpeed * 2 - _mSpeed;
+    this.zd = Math.random() * _mSpeed * 2 - _mSpeed;
+    this.xrd = Math.random() * _mRot * 2 - _mRot;
+    this.zrd = Math.random() * _mRot * 2 - _mRot;
+    this.yrd = Math.random() * _mRot * 2 - _mRot;
     this.size = opts.size;
     this.step = opts.step;
     this.padding = opts.padding;
@@ -105,9 +113,9 @@ function Vader(game, opts) {
             game.THREE.GeometryUtils.merge(mergedGeoBG, visibileArrBG[i]);
         }
     }
-    groups = [];
-    groups.push(new game.THREE.Mesh(mergedGeoBG, this.mats[0]));
-    groups.push(new game.THREE.Mesh(mergedGeo, this.mats[1]));
+    this.groups = [];
+    this.groups.push(new game.THREE.Mesh(mergedGeoBG, this.mats[0]));
+    this.groups.push(new game.THREE.Mesh(mergedGeo, this.mats[1]));
 
     var removeNonMerged = function(obj) {
         for (var i = 0; obj.children.length > i; i++) {
@@ -121,13 +129,104 @@ function Vader(game, opts) {
         }
     }
     removeNonMerged(vd);
-    for (var i = 0; i < groups.length; i++) {
-        vd.add(groups[i]);
+    for (var i = 0; i < this.groups.length; i++) {
+        vd.add(this.groups[i]);
     }
 
     var spaceVader = Creature.call(this, game, vd, {
         size: opts.size
     });
+
+    this.on('notice', function(player) {
+        this.lookAt(player);
+        this.move(((player.position.x - this.position.x) * 0.0005), ((player.position.y - this.position.y) * 0.0005), ((player.position.z - this.position.z) * 0.0005));
+    });
+
+    this.on('collide', function(player) {
+        console.log('collide');
+    });
+
+    this.notice(player, {
+        radius: 500
+    });
+
+    setInterval(function() {
+        if (this.noticed) return;
+        //creature.rotation.y += Math.random() * Math.PI / 2 - Math.PI / 4;
+        //creature.move(0, 0, 0.5 * Math.random());
+    }, 1000);
+
     return spaceVader;
 
+}
+
+Vader.prototype.Destroy = function(opts) {
+    if (!opts) opts = {};
+    //game.scene.remove(this.item.avatar);
+    this._events = null;
+    this.item = null;
+}
+
+Vader.prototype.Explode = function() {
+    var blockArr = [],
+        _vd = this;
+    this._events.notice = null;
+    this._events.collide = null;
+    this.move = null;
+    var showGeo = function(obj) {
+        for (var i = 0; obj.children.length > i; i++) {
+            if (obj.children != undefined && obj.children[i].children.length == 0 && obj.children[i].vaderT == 'hidden' && obj.children[i].visible == false) {
+                obj.children[i].visible = true;
+                obj.children[i].vaderT = "hidden";
+                blockArr.push(obj.children[i]);
+                showGeo(obj);
+            } else if (obj.children != undefined) {
+                showGeo(obj.children[i]);
+            }
+        }
+    }
+    showGeo(this.vaderObj);
+
+    for (var i = 0; i < this.groups.length; i++) {
+        this.groups[i].visible = false;
+    }
+    var _vObj = {
+        vaderObj: blockArr,
+        zd: this.zd,
+        yd: this.yd,
+        xd: this.xd,
+        xd: this.xd,
+        xrd: this.xrd,
+        yrd: this.yrd,
+        zrd: this.zrd
+    };
+
+    setTimeout(function() {
+        try {
+            game.scene.remove(_vd.item.avatar);
+            _vd.item = null;
+        } catch (e) {
+            //console.log(e);
+        }
+    }, 5000);
+    setInterval(function() {
+        for (var i = 0; _vObj.vaderObj.length > i; i++) {
+            //  var matrix = new game.THREE.Matrix4().getInverse(_vObj.vaderObj[i].matrixWorld);
+            // var vector = _vObj.vaderObj[i].position.getPositionFromMatrix(matrix);
+            /* _vObj.vaderObj[i].position.x = vector.x + _vObj.xd;
+            _vObj.vaderObj[i].position.y = vector.y + _vObj.yd;
+            _vObj.vaderObj[i].position.z = vector.z + _vObj.zd;*/
+            if (_vObj.vaderObj[i].visible == true) {
+                _vObj.vaderObj[i].visible = false;
+            } else {
+                _vObj.vaderObj[i].visible = true;
+            }
+            _vObj.vaderObj[i].position.x += _vObj.xd;
+            _vObj.vaderObj[i].position.y += _vObj.yd;
+            _vObj.vaderObj[i].position.z += _vObj.zd;
+            _vObj.vaderObj[i].rotation.x += _vObj.xrd;
+            _vObj.vaderObj[i].rotation.z += _vObj.zrd;
+            _vObj.vaderObj[i].rotation.y += _vObj.yrd;
+        }
+    }, 1000 / 60);
 }
