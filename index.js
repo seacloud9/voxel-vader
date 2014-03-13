@@ -13,21 +13,32 @@ module.exports.Vader = Vader;
 
 function Vader(game, opts) {
     if (!opts) opts = {};
-    if (opts.clr == undefined) opts.clr = [0xffffff, 0x800830];
+    if (opts.cPool == undefined) opts.cPool = [0x800830, 0x7F0863, 660000, 0x5B001A, 0x65087F];
+    if (opts.clr == undefined) opts.clr = [new game.THREE.Color(opts.cPool[Math.floor(Math.random() * opts.cPool.length)]), new game.THREE.Color(opts.cPool[Math.floor(Math.random() * opts.cPool.length)])];
     if (opts.amb == undefined) opts.amb = [0x800830, 0x800830];
     if (opts.size == undefined) opts.size = 5;
     if (opts.step == undefined) opts.step = opts.size / 5;
     if (opts.padding == undefined) opts.padding = parseInt(opts.size / 2);
+    if (opts.points == undefined) opts.points = 10;
+    if (opts.damage == undefined) opts.damage = 1;
     if (opts.mats == undefined) opts.mats = [
-        new game.THREE.MeshLambertMaterial({
-            color: opts.clr[1],
-            ambient: opts.amb[1]
+        new game.THREE.MeshPhongMaterial({
+            color: opts.clr[0],
+            ambient: opts.clr[0],
+            specular: 0xffff00,
+            emissive: 0x111111,
+            shininess: 100
         }),
         new game.THREE.MeshLambertMaterial({
-            color: opts.clr[0],
-            ambient: opts.amb[0]
+            ccolor: opts.clr[1],
+            ambient: opts.clr[1],
+            specular: 0xffff00,
+            emissive: 0x111111,
+            shininess: 100
         }),
     ];
+    var vB = require('voxel-bullet');
+    this._vaderBullet = vB(game)();
 
     var _mSpeed = .2;
     var _mRot = .1;
@@ -37,10 +48,13 @@ function Vader(game, opts) {
     this.xrd = Math.random() * _mRot * 2 - _mRot;
     this.zrd = Math.random() * _mRot * 2 - _mRot;
     this.yrd = Math.random() * _mRot * 2 - _mRot;
+    this.cPool = opts.cPool;
     this.size = opts.size;
     this.step = opts.step;
+    this.points = opts.points;
     this.padding = opts.padding;
     this.mats = opts.mats;
+    this.damage = opts.damage;
 
     var createVader = function(mat) {
         return new game.THREE.Mesh(
@@ -113,10 +127,45 @@ function Vader(game, opts) {
             game.THREE.GeometryUtils.merge(mergedGeoBG, visibileArrBG[i]);
         }
     }
+
+    var customMaterial = new game.THREE.ShaderMaterial({
+        uniforms: {
+            "c": {
+                type: "f",
+                value: 0
+            },
+            "p": {
+                type: "f",
+                value: 5.3
+            },
+            glowColor: {
+                type: "c",
+                value: new game.THREE.Color(0xffff00)
+            },
+            viewVector: {
+                type: "v3",
+                value: player.currentCamera
+            }
+        },
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: document.getElementById('fragmentShader').textContent,
+        side: game.THREE.DoubleSide,
+        blending: game.THREE.AdditiveBlending,
+        opacity: 0.3,
+        transparent: true
+    });
     this.groups = [];
     this.groups.push(new game.THREE.Mesh(mergedGeoBG, this.mats[0]));
-    this.groups.push(new game.THREE.Mesh(mergedGeo, this.mats[1]));
+    this.groups[(this.groups.length - 1)].isGlowing = false;
+    this.groups.push(new game.THREE.Mesh(mergedGeoBG, customMaterial.clone()));
+    this.groups[(this.groups.length - 1)].scale.multiplyScalar(1.1);
+    this.groups[(this.groups.length - 1)].isGlowing = true;
 
+    this.groups.push(new game.THREE.Mesh(mergedGeo, customMaterial.clone()));
+    this.groups[(this.groups.length - 1)].scale.multiplyScalar(1.1);
+    this.groups[(this.groups.length - 1)].isGlowing = true;
+    this.groups.push(new game.THREE.Mesh(mergedGeo, this.mats[1]));
+    this.groups[(this.groups.length - 1)].isGlowing = false;
     var removeNonMerged = function(obj) {
         for (var i = 0; obj.children.length > i; i++) {
             if (obj.children != undefined && obj.children[i].children.length == 0 && obj.children[i].visible == true) {
@@ -140,10 +189,60 @@ function Vader(game, opts) {
     this.on('notice', function(player) {
         this.lookAt(player);
         this.move(((player.position.x - this.position.x) * 0.0005), ((player.position.y - this.position.y) * 0.0005), ((player.position.z - this.position.z) * 0.0005));
+        var rP = this.position;
+        var bArr = [new game.THREE.Vector3(rP.x, rP.y, rP.z)];
+        if (_initGame == true) {
+            this._vaderBullet.BuildBullets({
+                count: 1,
+                rootVector: player.position,
+                rootPosition: rP,
+                bulletPosition: bArr,
+                target: [player],
+                owner: 0
+            });
+        }
     });
 
     this.on('collide', function(player) {
-        console.log('collide');
+        if (_initGame == true) {
+            player.health -= this.damage;
+            healtHit(1.0 - (player.health / 100));
+        }
+    });
+
+    var _VD = this;
+    game.on('tick', function(delta) {
+        if (_VD != undefined) {
+            for (var i = 0; i < _VD.groups.length; i++) {
+                if (_VD.groups[i].isGlowing) {
+                    _VD.groups[i].material.uniforms.viewVector.value =
+                        new game.THREE.Vector3().subVectors(player.currentCamera.position, _VD.position);
+                }
+            }
+        }
+
+        if (typeof _VD._vaderBullet != undefined && _initGame == true && _VD.item != null) {
+            var speed = delta * _VD._vaderBullet.speed;
+            _delta = delta;
+            for (var i = _VD._vaderBullet.live.length - 1; i >= 0; i--) {
+                try {
+                    var b = _VD._vaderBullet.live[i].mesh;
+                    var gcDist = b.position.distanceTo(game.camera.position);
+                    if (game.camera.far < gcDist) {
+                        _VD._vaderBullet.live.splice(b.id, 1);
+                        b.Destroy();
+                        game.scene.remove(b);
+                    }
+                    var p = b.position,
+                        d = b.ray.direction;
+                    b.translateX(speed * d.x);
+                    b.translateY(speed * d.y);
+                    b.translateZ(speed * d.z);
+                } catch (e) {
+                    break;
+                }
+            }
+        }
     });
 
     this.notice(player, {
@@ -152,24 +251,32 @@ function Vader(game, opts) {
 
     setInterval(function() {
         if (this.noticed) return;
-        //creature.rotation.y += Math.random() * Math.PI / 2 - Math.PI / 4;
-        //creature.move(0, 0, 0.5 * Math.random());
     }, 1000);
+
+
+
 
     return spaceVader;
 
 }
 
-Vader.prototype.Destroy = function(opts) {
-    if (!opts) opts = {};
-    //game.scene.remove(this.item.avatar);
-    this._events = null;
-    this.item = null;
+Vader.prototype.Destroy = function() {
+    try {
+        game.scene.remove(this.vaderObj);
+        this.removeAllListeners();
+        this.vaderObj.visible = false;
+        this._events.notice = null;
+        this._events.collide = null;
+
+    } catch (e) {
+        //console.log(e);
+    }
 }
 
 Vader.prototype.Explode = function() {
     var blockArr = [],
         _vd = this;
+    this.removeAllListeners();
     this._events.notice = null;
     this._events.collide = null;
     this.move = null;
@@ -229,4 +336,5 @@ Vader.prototype.Explode = function() {
             _vObj.vaderObj[i].rotation.y += _vObj.yrd;
         }
     }, 1000 / 60);
+    return this.points;
 }
