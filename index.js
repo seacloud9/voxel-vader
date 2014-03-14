@@ -13,9 +13,9 @@ module.exports.Vader = Vader;
 
 function Vader(game, opts) {
     if (!opts) opts = {};
-    if (opts.cPool == undefined) opts.cPool = [0x800830, 0x7F0863, 660000, 0x5B001A, 0x65087F];
+    if (opts.cPool == undefined) opts.cPool = [0x800830, 0x7F0863, 660000, 0x5B001A, 0x65087F, 0xff0084, 0x00F1F9];
     if (opts.clr == undefined) opts.clr = [new game.THREE.Color(opts.cPool[Math.floor(Math.random() * opts.cPool.length)]), new game.THREE.Color(opts.cPool[Math.floor(Math.random() * opts.cPool.length)])];
-    if (opts.amb == undefined) opts.amb = [0x800830, 0x800830];
+    //if (opts.amb == undefined) opts.amb = [0x800830, 0x800830];
     if (opts.size == undefined) opts.size = 5;
     if (opts.step == undefined) opts.step = opts.size / 5;
     if (opts.padding == undefined) opts.padding = parseInt(opts.size / 2);
@@ -230,7 +230,7 @@ function Vader(game, opts) {
                     var gcDist = b.position.distanceTo(game.camera.position);
                     if (game.camera.far < gcDist) {
                         _VD._vaderBullet.live.splice(b.id, 1);
-                        b.Destroy();
+                        b.Destory();
                         game.scene.remove(b);
                     }
                     var p = b.position,
@@ -265,6 +265,10 @@ Vader.prototype.Destroy = function() {
         game.scene.remove(this.vaderObj);
         this.removeAllListeners();
         this.vaderObj.visible = false;
+        for (var i = this._vaderBullet.live.length - 1; i >= 0; i--) {
+            var b = this._vaderBullet.live[i];
+            b.Destory();
+        }
         this._events.notice = null;
         this._events.collide = null;
 
